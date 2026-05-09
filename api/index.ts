@@ -1,4 +1,4 @@
-import { handleRequest } from "../dist/server/server.js";
+import { handleRequest } from "../src/server";
 
 function brandedErrorResponse(): Response {
   return new Response(`<!doctype html>
