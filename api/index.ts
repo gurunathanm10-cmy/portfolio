@@ -10,11 +10,36 @@ function brandedErrorResponse(): Response {
   });
 }
 
-export default async function handler(request: Request): Promise<Response> {
+async function sendNodeResponse(res: any, response: Response) {
+  res.statusCode = response.status;
+  response.headers.forEach((value, name) => {
+    res.setHeader(name, value);
+  });
+
+  const body = response.body;
+  if (!body) {
+    res.end();
+    return;
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  res.end(buffer);
+}
+
+export default async function handler(req: any, res: any) {
   try {
-    return await handleRequest(request);
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const request = new Request(url.toString(), {
+      method: req.method,
+      headers: req.headers as any,
+      body: req.method !== "GET" && req.method !== "HEAD" ? req : undefined,
+    });
+
+    const response = await handleRequest(request);
+    await sendNodeResponse(res, response);
   } catch (error) {
     console.error(error);
-    return brandedErrorResponse();
+    const response = brandedErrorResponse();
+    await sendNodeResponse(res, response);
   }
 }
