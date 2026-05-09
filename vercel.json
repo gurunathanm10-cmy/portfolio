@@ -1,5 +1,12 @@
 {
+  "version": 3,
   "buildCommand": "npm run build",
+  "functions": {
+    "api/index.ts": {
+      "runtime": "nodejs:20.x",
+      "includeFiles": ["dist/**"]
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
