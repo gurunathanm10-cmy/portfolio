@@ -66,8 +66,9 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
+// Vercel serverless function export
 export default {
-  async fetch(request: Request, env: unknown, ctx: unknown) {
+  async fetch(request: Request, env: unknown = {}, ctx: unknown = {}) {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
@@ -78,3 +79,62 @@ export default {
     }
   },
 };
+
+// For local development with Node.js
+if (typeof process !== "undefined" && process.env.NODE_ENV === "development") {
+  const { createServer } = await import("http");
+  const handler = await getServerEntry();
+
+  const server = createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url || "", `http://${req.headers.host}`);
+      const request = new Request(url.toString(), {
+        method: req.method,
+        headers: req.headers as any,
+        body: req.method !== "GET" && req.method !== "HEAD" ? req : undefined,
+      });
+
+      const response = await handler.fetch(request, {}, {});
+      const normalizedResponse = await normalizeCatastrophicSsrResponse(response);
+
+      res.statusCode = normalizedResponse.status;
+      for (const [key, value] of normalizedResponse.headers) {
+        res.setHeader(key, value);
+      }
+
+      const body = normalizedResponse.body;
+      if (body) {
+        const reader = body.getReader();
+        const stream = new ReadableStream({
+          start(controller) {
+            function pump() {
+              reader.read().then(({ done, value }) => {
+                if (done) {
+                  controller.close();
+                  res.end();
+                  return;
+                }
+                controller.enqueue(value);
+                res.write(Buffer.from(value));
+                pump();
+              });
+            }
+            pump();
+          },
+        });
+      } else {
+        res.end();
+      }
+    } catch (error) {
+      console.error(error);
+      res.statusCode = 500;
+      res.setHeader("content-type", "text/html; charset=utf-8");
+      res.end(renderErrorPage());
+    }
+  });
+
+  const port = process.env.PORT || 3000;
+  server.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+  });
+}
